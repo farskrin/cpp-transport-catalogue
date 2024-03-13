@@ -12,9 +12,8 @@
 namespace model {
 
     struct Stop {
-        //std::string stop_name;
-        geo::Coordinates coord;    
-        std::set<std::string_view> stop_buses;
+        std::string name;
+        geo::Coordinates coord;        
     };
     
     struct RouteInfo {
@@ -25,9 +24,8 @@ namespace model {
     };
 
     struct Bus {
-        //std::string bus_name;
-        std::vector<std::string_view> stops;
-        RouteInfo route_info;
+        std::string name;
+        std::vector<std::string_view> route;        
     };
 
     class TransportCatalogue {
@@ -35,26 +33,27 @@ namespace model {
         TransportCatalogue() = default;
         ~TransportCatalogue();
 
-        void AddStop(const std::string& stop_name, Stop* stop);
+        void AddStop(const std::string& stop_name, const geo::Coordinates& coord);
 
-        void AddBus(const std::string& bus_name, const Bus* bus);
+        void AddBus(const std::string& bus_name, const std::vector<std::string_view>& route);
 
         const Bus* FindBusByName(std::string_view bus_name) const;
 
-        Stop* FindStopByName(std::string_view stop_name) const;
+        const Stop* FindStopByName(std::string_view stop_name) const;
 
-        std::optional<std::set<std::string_view>> FindStopBusesByName(std::string_view stop_name) const;
+        std::optional<std::set<std::string_view>> GetBusesByStop(std::string_view stop_name) const;
 
-        std::string_view GetClonedStop(std::string_view s);
-
-        std::string_view GetClonedBus(std::string_view s);
-
+        std::optional<RouteInfo> GetRouteInfoByBusName(const std::string& name) const;
 
     private:
+        std::string_view GetCopyStopName(std::string_view name);
+        std::string_view GetCopyBusName(std::string_view name);
+
         std::deque<std::string> stops_;
         std::deque<std::string> buses_;
-        std::unordered_map<std::string_view, Stop*> stop_data_;
-        std::unordered_map<std::string_view, const Bus*> bus_data_;        
+        std::unordered_map<std::string_view, const Stop*> stop_data_;
+        std::unordered_map<std::string_view, const Bus*> bus_data_;
+        mutable std::unordered_map<std::string_view, std::set<std::string_view>> stop_buses_;
     };
 
 }

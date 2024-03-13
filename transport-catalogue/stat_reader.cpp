@@ -18,11 +18,11 @@ namespace io {
 
         std::string_view command = request.substr(0, space_pos);
         std::string_view id = request.substr(not_space);
+
         if (command == "Bus") {
-            if (auto bus = transport_catalogue.FindBusByName(id); bus != nullptr) {
-                const auto& info = bus->route_info;
-                output << request << ": " << info.stop_count << " stops on route, " << info.unique_stop_count 
-                    << " unique stops, " << std::setprecision(6) << info.route_length << " route length " << std::endl;
+            if (auto info = transport_catalogue.GetRouteInfoByBusName(std::string(id)); info.has_value()) {
+                output << request << ": " << info->stop_count << " stops on route, " << info->unique_stop_count
+                    << " unique stops, " << std::setprecision(6) << info->route_length << " route length " << std::endl;
             }
             else
             {
@@ -30,11 +30,11 @@ namespace io {
             }
         }
         if (command == "Stop") {
-            if (auto stop = transport_catalogue.FindStopByName(id); stop != nullptr) {
-                if (!stop->stop_buses.empty()) {
+            if (auto buses = transport_catalogue.GetBusesByStop(id); buses.has_value()) {
+                if (!buses.value().empty()) {
                     output << request << ": buses ";
-                    for (const auto& bus : stop->stop_buses) {
-                        output << bus << " ";
+                    for (const auto& bus_name : buses.value()) {
+                        output << bus_name << " ";
                     }
                     output << std::endl;
                 }

@@ -11,13 +11,26 @@ namespace model {
         }
     }
 
-    void TransportCatalogue::AddStop(const std::string& stop_name, Stop* stop) {
-        const std::string_view copy_name = GetClonedStop(stop_name);
+    void TransportCatalogue::AddStop(const std::string& stop_name, const geo::Coordinates& coord) {
+        const Stop* stop = new Stop{ stop_name, coord };
+        const std::string_view copy_name = GetCopyStopName(stop_name);
         stop_data_[copy_name] = stop;
     }
 
-    void TransportCatalogue::AddBus(const std::string& bus_name, const Bus* bus) {
-        const std::string_view copy_name = GetClonedStop(bus_name);
+    void TransportCatalogue::AddBus(const std::string& bus_name, const std::vector<std::string_view>& route) {
+
+        std::vector<std::string_view> copy_route;
+        copy_route.reserve(route.size());
+        for (std::string_view stop_name : route) {
+            std::string_view copy_stop_name = GetCopyStopName(stop_name);
+            copy_route.push_back(copy_stop_name);
+            //--
+            stop_buses_[copy_stop_name].insert(GetCopyBusName(bus_name));
+        }
+
+        const Bus* bus = new Bus{ bus_name, copy_route };
+
+        const std::string_view copy_name = GetCopyBusName(bus_name);
         bus_data_[copy_name] = bus;
     }
 
@@ -28,34 +41,63 @@ namespace model {
         return nullptr;
     }
 
-    Stop* TransportCatalogue::FindStopByName(std::string_view stop_name) const {
+    const Stop* TransportCatalogue::FindStopByName(std::string_view stop_name) const {
         if (stop_data_.count(stop_name)) {
             return stop_data_.at(stop_name);
         }
         return nullptr;
     }
 
-    std::optional<std::set<std::string_view>> TransportCatalogue::FindStopBusesByName(std::string_view stop_name) const {
-        if (stop_data_.count(stop_name)) {
-            return stop_data_.at(stop_name)->stop_buses;
+    std::optional<std::set<std::string_view>> TransportCatalogue::GetBusesByStop(std::string_view stop_name) const {
+        if (stop_data_.size() != stop_buses_.size()) {
+            for (const auto& [key, value] : stop_data_) {
+                stop_buses_[key];
+            }
+        }
+        if (stop_buses_.count(stop_name)) {
+            return stop_buses_.at(stop_name);
         }
         return std::nullopt;
     }
 
-    std::string_view TransportCatalogue::GetClonedStop(std::string_view s) {
-        const auto it = stop_data_.find(s);
-        if (it != stop_data_.end()) {
-            return it->first;
+    std::optional<RouteInfo> TransportCatalogue::GetRouteInfoByBusName(const std::string& name) const {
+
+        if (bus_data_.count(name)) {
+            auto bus = bus_data_.at(name);
+            auto route = bus->route;
+
+            double route_length = 0.0;
+            size_t route_size = route.size();
+            for (size_t i = 0; i + 1 < route_size; i++) {
+                geo::Coordinates from = FindStopByName(route[i])->coord;
+                geo::Coordinates to = FindStopByName(route[i + 1])->coord;
+                double distance = ComputeDistance(from, to);
+                route_length += distance;
+            }
+
+            std::set<std::string_view> unique_stop(route.begin(), route.end());
+            RouteInfo info;
+            info.route_name = bus->name;
+            info.stop_count = route_size;
+            info.unique_stop_count = unique_stop.size();
+            info.route_length = route_length;
+            return info;
         }
-        return stops_.emplace_back(s);
+
+        return std::nullopt;
     }
 
-    std::string_view TransportCatalogue::GetClonedBus(std::string_view s) {
-        const auto it = bus_data_.find(s);
-        if (it != bus_data_.end()) {
+    std::string_view TransportCatalogue::GetCopyStopName(std::string_view name) {        
+        if (const auto it = stop_data_.find(name); it != stop_data_.end()) {
             return it->first;
         }
-        return buses_.emplace_back(s);
+        return stops_.emplace_back(name);
     }
 
+    std::string_view TransportCatalogue::GetCopyBusName(std::string_view name) {        
+        if (const auto it = bus_data_.find(name); it != bus_data_.end()) {
+            return it->first;
+        }
+        return buses_.emplace_back(name);
+    }
 }

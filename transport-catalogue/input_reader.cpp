@@ -112,37 +112,14 @@ namespace io {
     void InputReader::ApplyCommands(model::TransportCatalogue& catalogue) const {
         for (const auto& command : commands_) {
             if (command.command == "Stop") {
-                Coordinates coord = ParseCoordinates(command.description);
-                Stop* stop = new Stop{ coord, {} };
-                catalogue.AddStop(command.id, stop);
+                Coordinates coord = ParseCoordinates(command.description);                
+                catalogue.AddStop(command.id, coord);
             }
         }
         for (const auto& command : commands_) {
             if (command.command == "Bus") {
                 std::vector<std::string_view> route = ParseRoute(command.description);
-                double route_length = 0.0;
-                size_t route_size = route.size();
-                for (size_t i = 0; i + 1 < route_size; i++) {
-                    Coordinates from = catalogue.FindStopByName(route[i])->coord;
-                    Coordinates to = catalogue.FindStopByName(route[i + 1])->coord;
-                    double distance = ComputeDistance(from, to);
-                    route_length += distance;
-                }
-                for (std::string_view stop : route) {
-                    catalogue.FindStopByName(stop)->stop_buses.insert(catalogue.GetClonedStop(command.id));
-                }
-
-                set<string_view> unique_stop(route.begin(), route.end());
-
-                RouteInfo route_info;
-                route_info.route_name = command.id;
-                route_info.stop_count = route_size;
-                route_info.unique_stop_count = unique_stop.size();
-                route_info.route_length = route_length;
-
-                const Bus* bus = new Bus{ route, route_info };
-
-                catalogue.AddBus(command.id, bus);
+                catalogue.AddBus(command.id, route);
             }
         }
     }
