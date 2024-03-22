@@ -1,6 +1,7 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.15.0)
 
-project(TransportTask2)
+set(PROJECT TransportCatalogue2)
+project(${PROJECT})
 set(CMAKE_CXX_STANDARD 17)
 
 file(GLOB SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp" 
@@ -8,6 +9,6 @@ file(GLOB SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 
 source_group ("sources" FILES ${SOURCES} )
 
-add_executable(TransportTask2 ${SOURCES} )
+add_executable(${PROJECT} ${SOURCES} )
 
 
