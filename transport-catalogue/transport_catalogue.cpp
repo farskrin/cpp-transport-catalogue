@@ -7,9 +7,9 @@ namespace model {
         stop_data_[stop_ptr->name] = stop_ptr;
     }
 
-    void TransportCatalogue::AddStopsDistance(const std::string& stop1, const std::string& stop2, double distance)
+    void TransportCatalogue::SetStopsDistance(const std::string& from, const std::string& to, double distance)
     {
-        auto pair_stops = std::make_pair(FindStopByName(stop1), FindStopByName(stop2));
+        auto pair_stops = std::make_pair(FindStopByName(from), FindStopByName(to));
         stops_distance_[pair_stops] = distance;
     }
 
@@ -41,15 +41,15 @@ namespace model {
         return nullptr;
     }
 
-    double TransportCatalogue::GetStopsDistance(std::string_view stop1, std::string_view stop2) const
+    double TransportCatalogue::GetStopsDistance(std::string_view from, std::string_view to) const
     {
-        auto pair_stops12 = std::make_pair(FindStopByName(stop1), FindStopByName(stop2));
-        auto pair_stops21 = std::make_pair(FindStopByName(stop2), FindStopByName(stop1));
-        if (stops_distance_.count(pair_stops12)) {
-            return stops_distance_.at(pair_stops12);
+        auto pair_stops_from = std::make_pair(FindStopByName(from), FindStopByName(to));
+        auto pair_stops_to = std::make_pair(FindStopByName(to), FindStopByName(from));
+        if (stops_distance_.count(pair_stops_from)) {
+            return stops_distance_.at(pair_stops_from);
         }
-        if (stops_distance_.count(pair_stops21)) {
-            return stops_distance_.at(pair_stops21);
+        if (stops_distance_.count(pair_stops_to)) {
+            return stops_distance_.at(pair_stops_to);
         }
         else
         {

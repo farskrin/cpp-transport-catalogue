@@ -150,7 +150,7 @@ namespace io {
         for (const auto& command : commands_stop) {
             auto dist_to_stop = ParseDistanceToStop(command.description);
             for (const auto& [to_stop, dist] : dist_to_stop) {
-                catalogue.AddStopsDistance(command.id, to_stop, dist);
+                catalogue.SetStopsDistance(command.id, to_stop, dist);
             }
         }
 

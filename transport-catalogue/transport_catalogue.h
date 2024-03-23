@@ -46,13 +46,13 @@ namespace model {
         TransportCatalogue() = default;
 
         void AddStop(const std::string& stop_name, const geo::Coordinates& coord);
-        void AddStopsDistance(const std::string& stop1, const std::string& stop2, double distance);
+        void SetStopsDistance(const std::string& from, const std::string& to, double distance);
         void AddBus(const std::string& bus_name, const std::vector<std::string_view>& route);
 
         const Bus* FindBusByName(std::string_view bus_name) const;
         const Stop* FindStopByName(std::string_view stop_name) const;
 
-        double GetStopsDistance(std::string_view stop1, std::string_view stop2) const;
+        double GetStopsDistance(std::string_view from, std::string_view to) const;
         std::optional<std::set<std::string_view>> GetBusesByStop(std::string_view stop_name) const;
         std::optional<RouteInfo> GetRouteInfoByBusName(const std::string& name) const;
 
