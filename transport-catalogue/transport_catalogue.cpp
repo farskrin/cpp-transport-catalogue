@@ -3,7 +3,7 @@
 namespace model {
 
     void TransportCatalogue::AddStop(const std::string& stop_name, const geo::Coordinates& coord) {
-        auto stop_ptr = GetStopPtr(stop_name, coord);        
+        auto stop_ptr = GetStopPtr(stop_name, coord);
         stop_data_[stop_ptr->name] = stop_ptr;
     }
 
@@ -13,17 +13,23 @@ namespace model {
         stops_distance_[pair_stops] = distance;
     }
 
-    void TransportCatalogue::AddBus(const std::string& bus_name, const std::vector<std::string_view>& route) {
+    void TransportCatalogue::AddBus(const std::string& bus_name, const std::vector<std::string>& route,
+        const std::vector<std::string>& end_points, bool is_roundtrip) {
 
         std::vector<std::string_view> copy_route(route.size());
         std::transform(route.begin(), route.end(), copy_route.begin(), [&](std::string_view s) {
             return GetCopyStopName(s);
             });
-        auto bus_ptr = GetBusPtr(bus_name, copy_route);
+        std::vector<std::string_view> copy_end_points(end_points.size());
+        std::transform(end_points.begin(), end_points.end(), copy_end_points.begin(), [&](std::string_view s) {
+            return GetCopyStopName(s);
+            });
+        auto bus_ptr = GetBusPtr(bus_name, copy_route, copy_end_points, is_roundtrip);
         bus_data_[bus_ptr->name] = bus_ptr;
         //--
-        for (std::string_view stop_name : copy_route) {            
+        for (std::string_view stop_name : copy_route) {
             stop_buses_[stop_name].insert(GetCopyBusName(bus_name));
+            stops_in_routes_.insert(stop_name);
         }
     }
 
@@ -81,7 +87,7 @@ namespace model {
             for (size_t i = 0; i + 1 < route_size; i++) {
                 geo::Coordinates from = FindStopByName(route[i])->coord;
                 geo::Coordinates to = FindStopByName(route[i + 1])->coord;
-                double geographic_dist = ComputeDistance(from, to);
+                double geographic_dist = geo::ComputeDistance(from, to);
                 geographic_length += geographic_dist;
                 double road_dist = GetStopsDistance(route[i], route[i + 1]);
                 road_length += road_dist;
@@ -100,6 +106,18 @@ namespace model {
         return std::nullopt;
     }
 
+    const std::unordered_map<std::string_view, const Bus*>& TransportCatalogue::GetBusData() const {
+        return bus_data_;
+    }
+
+    std::set<std::string_view> TransportCatalogue::GetSortedStopsInRoutes() const {
+        return stops_in_routes_;
+    }
+
+    /*const std::unordered_map<std::string_view, std::set<std::string_view>>& TransportCatalogue::GetStopPerBuses() const {
+        return stop_buses_;
+    }*/
+
     const Stop* TransportCatalogue::GetStopPtr(const std::string& name, const geo::Coordinates& coord)
     {
         if (const auto it = stop_data_.find(name); it != stop_data_.end()) {
@@ -115,15 +133,16 @@ namespace model {
         throw std::logic_error("GetCopyStopName: stop_data not contain stop name");
     }
 
-    const Bus* TransportCatalogue::GetBusPtr(const std::string& name, const std::vector<std::string_view>& route)
+    const Bus* TransportCatalogue::GetBusPtr(const std::string& name, const std::vector<std::string_view>& route,
+        const std::vector<std::string_view>& end_points, bool is_roundtrip)
     {
         if (const auto it = bus_data_.find(name); it != bus_data_.end()) {
             return it->second;
         }
-        return &buses_.emplace_back(name, route);
+        return &buses_.emplace_back(name, route, end_points, is_roundtrip);
     }
 
-    std::string_view TransportCatalogue::GetCopyBusName(std::string_view name) {        
+    std::string_view TransportCatalogue::GetCopyBusName(std::string_view name) {
         if (const auto it = bus_data_.find(name); it != bus_data_.end()) {
             return it->first;
         }

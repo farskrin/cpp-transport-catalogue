@@ -1,34 +1,39 @@
 #include <iostream>
 #include <string>
+#include <fstream>
+#include <sstream>
 
-#include "input_reader.h"
-#include "stat_reader.h"
+#include "transport_catalogue.h"
+#include "request_handler.h"
+#include "json_reader.h"
+#include "map_renderer.h"
 
 using namespace std;
 using namespace model;
 using namespace io;
 
+std::stringstream ReadFile(const std::string& file_name) {
+    std::ifstream f(file_name);
+    if (!f.is_open()) {
+        throw std::runtime_error("Error: can not open file: "s + file_name);
+    }
+    std::stringstream ss;
+    ss << f.rdbuf();
+    return ss;
+}
+
 int main() {
+
     TransportCatalogue catalogue;
 
-    int base_request_count;
-    cin >> base_request_count >> ws;
+    JsonReader reader(std::cin);
+    reader.ApplyBaseRequests(catalogue);
+    reader.ApplyStatRequests(catalogue);
 
-    {
-        InputReader reader;
-        for (int i = 0; i < base_request_count; ++i) {
-            string line;
-            getline(cin, line);
-            reader.ParseLine(line);
-        }
-        reader.ApplyCommands(catalogue);
-    }
+    /*auto settings = reader.ParseRenderSettings();
+    renderer::MapRenderer map_renderer(catalogue, settings);
+    auto doc = map_renderer.RenderMap();
+    doc.Render(std::cout);*/
 
-    int stat_request_count;
-    cin >> stat_request_count >> ws;
-    for (int i = 0; i < stat_request_count; ++i) {
-        string line;
-        getline(cin, line);
-        ParseAndPrintStat(catalogue, line, cout);
-    }
+    return 0;
 }
