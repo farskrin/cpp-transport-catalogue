@@ -112,16 +112,24 @@ namespace renderer {
 	class MapRenderer {
     public:
         MapRenderer(const model::TransportCatalogue& db, const RenderSettings& settings)
-            : db_(db), settings_(settings) {
+            : db_(db), settings_(settings), geo_coords_(GetGeoCoords()), 
+            proj_(SphereProjector{ geo_coords_.begin(), geo_coords_.end(), settings_.width, settings_.height, settings_.padding }) {
         }
 
         svg::Document RenderMap() const;
+
     private:
         std::set<std::string_view> GetSortedStops() const;
         std::vector<geo::Coordinates> GetGeoCoords() const;
+        void GenerateRoutesLine(svg::Document& doc, const std::set<std::string>& bus_names, const std::vector<svg::Color>& color_palette) const;
+        void GenerateRoutesLabel(svg::Document& doc, const std::set<std::string>& bus_names, const std::vector<svg::Color>& color_palette) const;
+        void GenerateStopsCircle(svg::Document& doc, const std::set<std::string_view>& sorted_stops) const;
+        void GenerateStopsLabel(svg::Document& doc, const std::set<std::string_view>& sorted_stops) const;
 
         const model::TransportCatalogue& db_;
         const RenderSettings& settings_;
+        const std::vector<geo::Coordinates>& geo_coords_;
+        const SphereProjector& proj_;
 	};
 
 }

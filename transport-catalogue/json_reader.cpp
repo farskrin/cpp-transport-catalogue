@@ -154,7 +154,7 @@ namespace io {
         if (auto buses = transport_catalogue.GetBusesByStop(name); buses.has_value()) {            
             json::Array buses_list;
             for (const auto& bus_name : buses.value()) {
-                buses_list.push_back(std::string(bus_name));
+                buses_list.emplace_back(std::string(bus_name));
             }
             dict["buses"] = buses_list;
         }
@@ -207,6 +207,6 @@ namespace io {
             }
 
         }
-		Print(json::Document{ result }, std::cout);
+		Print(json::Document{ Node(std::move(result)) }, std::cout);
     }
 }

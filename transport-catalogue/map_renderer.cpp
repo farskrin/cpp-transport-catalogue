@@ -13,21 +13,7 @@ namespace renderer {
         };
     }
 
-    svg::Document MapRenderer::RenderMap() const {
-        auto geo_coords = GetGeoCoords();
-        const SphereProjector proj{ geo_coords.begin(), geo_coords.end(), settings_.width, settings_.height, settings_.padding };
-
-        auto bus_data = db_.GetBusData();
-        std::set<std::string> bus_names;
-        std::transform(bus_data.begin(), bus_data.end(), std::inserter(bus_names, bus_names.begin()),
-            [](const std::pair<std::string_view, const model::Bus*>& data) {
-                return std::string(data.first);
-            });
-
-        std::vector<svg::Color> color_palette = settings_.color_palette;
-
-        svg::Document doc;
-        //--
+    void MapRenderer::GenerateRoutesLine(svg::Document& doc, const std::set<std::string>& bus_names, const std::vector<svg::Color>& color_palette) const {
         size_t color_idx = 0;
         size_t color_cnt = color_palette.size();
         for (const auto& bus_name : bus_names) {
@@ -37,7 +23,7 @@ namespace renderer {
 
             for (const auto& stop_name : bus->route) {
                 auto stop = db_.FindStopByName(stop_name);
-                polyline.AddPoint(proj(stop->coord));
+                polyline.AddPoint(proj_(stop->coord));
             }
             //--
             polyline.SetFillColor("none")
@@ -48,8 +34,14 @@ namespace renderer {
             doc.Add(std::move(polyline));
             color_idx++;
         }
+        
+    }
+
+    void MapRenderer::GenerateRoutesLabel(svg::Document& doc, const std::set<std::string>& bus_names, const std::vector<svg::Color>& color_palette) const
+    {
         //--
-        color_idx = 0;
+        size_t color_idx = 0;
+        size_t color_cnt = color_palette.size();
         for (const auto& bus_name : bus_names) {
             auto bus = db_.FindBusByName(bus_name);
             if (bus->route.empty()) continue;
@@ -58,7 +50,7 @@ namespace renderer {
                 svg::Text text_front, text_back;
                 auto stop = db_.FindStopByName(stop_name);
                 text_front.SetFillColor(color_palette.at(color_idx % color_cnt))
-                    .SetPosition(proj(stop->coord))
+                    .SetPosition(proj_(stop->coord))
                     .SetOffset({ settings_.bus_label_offset.first, settings_.bus_label_offset.second })
                     .SetFontSize(settings_.bus_label_font_size)
                     .SetFontFamily("Verdana")
@@ -70,7 +62,7 @@ namespace renderer {
                     .SetStrokeWidth(settings_.underlayer_width)
                     .SetStrokeLineCap(svg::StrokeLineCap::ROUND)
                     .SetStrokeLineJoin(svg::StrokeLineJoin::ROUND)
-                    .SetPosition(proj(stop->coord))
+                    .SetPosition(proj_(stop->coord))
                     .SetOffset({ settings_.bus_label_offset.first, settings_.bus_label_offset.second })
                     .SetFontSize(settings_.bus_label_font_size)
                     .SetFontFamily("Verdana")
@@ -84,22 +76,27 @@ namespace renderer {
             }
             color_idx++;
         }
-        //--
-        std::set<std::string_view> sorted_stops = GetSortedStops();
+    }
+
+    void MapRenderer::GenerateStopsCircle(svg::Document& doc, const std::set<std::string_view>& sorted_stops) const
+    {        
         for (const auto& stop_name : sorted_stops) {
             auto stop = db_.FindStopByName(stop_name);
             svg::Circle circle;
-            circle.SetCenter(proj(stop->coord))
+            circle.SetCenter(proj_(stop->coord))
                 .SetRadius(settings_.stop_radius)
                 .SetFillColor("white");
             doc.Add(std::move(circle));
         }
-        //--
+    }
+
+    void MapRenderer::GenerateStopsLabel(svg::Document& doc, const std::set<std::string_view>& sorted_stops) const
+    {
         for (const auto& stop_name : sorted_stops) {
             svg::Text text_front, text_back;
             auto stop = db_.FindStopByName(stop_name);
             text_front.SetFillColor("black")
-                .SetPosition(proj(stop->coord))
+                .SetPosition(proj_(stop->coord))
                 .SetOffset({ settings_.stop_label_offset.first, settings_.stop_label_offset.second })
                 .SetFontSize(settings_.stop_label_font_size)
                 .SetFontFamily("Verdana")
@@ -110,7 +107,7 @@ namespace renderer {
                 .SetStrokeWidth(settings_.underlayer_width)
                 .SetStrokeLineCap(svg::StrokeLineCap::ROUND)
                 .SetStrokeLineJoin(svg::StrokeLineJoin::ROUND)
-                .SetPosition(proj(stop->coord))
+                .SetPosition(proj_(stop->coord))
                 .SetOffset({ settings_.stop_label_offset.first, settings_.stop_label_offset.second })
                 .SetFontSize(settings_.stop_label_font_size)
                 .SetFontFamily("Verdana")
@@ -119,6 +116,27 @@ namespace renderer {
             doc.Add(std::move(text_back));
             doc.Add(std::move(text_front));
         }
+    }    
+
+    svg::Document MapRenderer::RenderMap() const {
+
+        auto bus_data = db_.GetBusData();
+        std::set<std::string> bus_names;
+        std::transform(bus_data.begin(), bus_data.end(), std::inserter(bus_names, bus_names.begin()),
+            [](const std::pair<std::string_view, const model::Bus*>& data) {
+                return std::string(data.first);
+            });
+
+        std::vector<svg::Color> color_palette = settings_.color_palette;
+
+        svg::Document doc;
+        //--
+        GenerateRoutesLine(doc, bus_names, color_palette);
+        GenerateRoutesLabel(doc, bus_names, color_palette);
+        //--
+        std::set<std::string_view> sorted_stops = GetSortedStops();
+        GenerateStopsCircle(doc, sorted_stops);
+        GenerateStopsLabel(doc, sorted_stops);
 
         return doc;
     }

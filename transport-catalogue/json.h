@@ -24,79 +24,89 @@ namespace json {
         using runtime_error::runtime_error;
     };
 
-    class Node {
+    using Value = std::variant<std::nullptr_t, Array, Dict, bool, int, double, std::string>;
+
+    class Node : public Value {
     public:
-        using Value = std::variant<std::nullptr_t, Array, Dict, bool, int, double, std::string>;
-
         Node() = default;
-        Node(std::nullptr_t) : value_(nullptr) {}
-        Node(Array array) : value_(array) {}
-        Node(Dict map) : value_(map) {}
-        Node(bool value) : value_(value) {}
-        Node(int value) : value_(value) {}
-        Node(double value) : value_(value) {}
-        Node(std::string value) : value_(value) {}
 
-        bool IsInt() const { return std::holds_alternative<int>(value_); }
-        bool IsDouble() const { return std::holds_alternative<int>(value_) || std::holds_alternative<double>(value_); }
-        bool IsPureDouble() const { return std::holds_alternative<double>(value_); }
-        bool IsBool() const { return std::holds_alternative<bool>(value_); }
-        bool IsString() const { return std::holds_alternative<std::string>(value_); }
-        bool IsNull() const { return std::holds_alternative<std::nullptr_t>(value_); }
-        bool IsArray() const { return std::holds_alternative<Array>(value_); }
-        bool IsMap() const { return std::holds_alternative<Dict>(value_); }
+        Node(const Value& rhs)
+            : Value(rhs) {            
+        }
+        Node(Value&& rhs) noexcept
+            : Value(std::move(rhs)) {
+        }
+        Node& operator=(const Value& rhs) {
+            if (*this != Node(rhs)) {
+                *this = rhs;
+            }
+            return *this;
+        }
+        Node& operator=(Value&& rhs) noexcept {
+            std::swap(*this, rhs);
+            return *this;
+        }
+
+        bool IsInt() const { return std::holds_alternative<int>(*this); }
+        bool IsDouble() const { return std::holds_alternative<int>(*this) || std::holds_alternative<double>(*this); }
+        bool IsPureDouble() const { return std::holds_alternative<double>(*this); }
+        bool IsBool() const { return std::holds_alternative<bool>(*this); }
+        bool IsString() const { return std::holds_alternative<std::string>(*this); }
+        bool IsNull() const { return std::holds_alternative<std::nullptr_t>(*this); }
+        bool IsArray() const { return std::holds_alternative<Array>(*this); }
+        bool IsMap() const { return std::holds_alternative<Dict>(*this); }
 
         int AsInt() const {
             if (IsInt()) {
-                return std::get<int>(value_);
+                return std::get<int>(*this);
             }
             throw std::logic_error("AsInt");
         }
         bool AsBool() const {
             if (IsBool()) {
-                return std::get<bool>(value_);
+                return std::get<bool>(*this);
             }
             throw std::logic_error("AsBool");
         }
         double AsDouble() const {
             if (IsInt()) {
-                return static_cast<double>(std::get<int>(value_));
+                return static_cast<double>(std::get<int>(*this));
             }
             if (IsDouble()) {
-                return std::get<double>(value_);
+                return std::get<double>(*this);
             }
             throw std::logic_error("AsDouble");
         }
         const std::string& AsString() const {
             if (IsString()) {
-                return std::get<std::string>(value_);
+                return std::get<std::string>(*this);
             }
             throw std::logic_error("AsString");
         }
         const Array& AsArray() const {
             if (IsArray()) {
-                return std::get<Array>(value_);
+                return std::get<Array>(*this);
             }
             throw std::logic_error("AsArray");
         }
         const Dict& AsMap() const {
             if (IsMap()) {
-                return std::get<Dict>(value_);
+                return std::get<Dict>(*this);
             }
             throw std::logic_error("AsMap");
         }
 
-        const Value& GetValue() const { return value_; }
+        const Value& GetValue() const { return *this; }
 
         bool operator==(const Node& rhs) const {
-            return value_ == rhs.value_;
+            return this == &rhs;
         }
         bool operator!=(const Node& rhs) const {
-            return value_ != rhs.value_;
+            return this != &rhs;
         }
 
     private:
-        Value value_;
+
     };
 
     class Document {
