@@ -1,4 +1,5 @@
 #include "json_reader.h"
+#include <sstream>
 
 /*
  * Здесь можно разместить код наполнения транспортного справочника данными из JSON,
@@ -32,12 +33,12 @@ namespace io {
         std::vector<size_t> commands_stop;
         std::vector<size_t> commands_bus;
         //--
-        auto root = doc_.GetRoot().AsMap();
+        auto root = doc_.GetRoot().AsDict();
         auto base_requests = root.at("base_requests");
         size_t command_idx = 0;
         const auto& base_list = base_requests.AsArray();
         for (const auto& base : base_list) {
-            const auto& base_obj = base.AsMap();
+            const auto& base_obj = base.AsDict();
             std::string type = base_obj.at("type").AsString();
             if (type == "Stop") {
                 geo::Coordinates coord = { base_obj.at("latitude").AsDouble(), base_obj.at("longitude").AsDouble() };
@@ -52,8 +53,8 @@ namespace io {
 
         for (size_t idx : commands_stop) {
             const auto& base = base_list[idx];
-            const auto& base_obj = base.AsMap();
-            const auto& road_distances = base_obj.at("road_distances").AsMap();
+            const auto& base_obj = base.AsDict();
+            const auto& road_distances = base_obj.at("road_distances").AsDict();
             for (const auto& [to_stop, dist] : road_distances) {
                 catalogue.SetStopsDistance(base_obj.at("name").AsString(), to_stop, dist.AsDouble());
             }
@@ -61,7 +62,7 @@ namespace io {
 
         for (size_t idx : commands_bus) {
             const auto& base = base_list[idx];
-            const auto& base_obj = base.AsMap();
+            const auto& base_obj = base.AsDict();
             std::string type = base_obj.at("type").AsString();
             if (type == "Bus") {
                 json::Node stops_node = base_obj.at("stops");
@@ -101,8 +102,8 @@ namespace io {
     renderer::RenderSettings JsonReader::ParseRenderSettings() const {
         using namespace json;
         renderer::RenderSettings render_settings;
-        auto root = doc_.GetRoot().AsMap();
-        auto settings_obj = root.at("render_settings").AsMap();
+        auto root = doc_.GetRoot().AsDict();
+        auto settings_obj = root.at("render_settings").AsDict();
         render_settings.width = settings_obj.at("width").AsDouble();
         render_settings.height = settings_obj.at("height").AsDouble();
         render_settings.padding = settings_obj.at("padding").AsDouble();
@@ -132,58 +133,60 @@ namespace io {
         return out.str();
     }
 
-    json::Node PrintBusStat(const model::TransportCatalogue& transport_catalogue, int id, std::string_view name) {
-        json::Dict dict;
-        dict["request_id"] = id;
+    void PrintBusStat(const model::TransportCatalogue& transport_catalogue, int id,
+        std::string_view name, json::Builder& response) {
+        response.StartDict();
+        response.Key("request_id").Value(id);
         if (auto info = transport_catalogue.GetRouteInfoByBusName(std::string(name)); info.has_value()) {
-            dict["curvature"] = json::Node(info->curvature);
-            dict["route_length"] = info->length;
-            dict["stop_count"] = static_cast<int>(info->stop_count);
-            dict["unique_stop_count"] = static_cast<int>(info->unique_stop_count);
+            response.Key("curvature").Value(info->curvature);
+            response.Key("route_length").Value(info->length);
+            response.Key("stop_count").Value(static_cast<int>(info->stop_count));
+            response.Key("unique_stop_count").Value(static_cast<int>(info->unique_stop_count));
         }
         else
         {
-            dict["error_message"] = "not found"s;
+            response.Key("error_message"s).Value("not found"s);
         }
-        return json::Node(dict);
+        response.EndDict();
     }
 
-    json::Node PrintStopStat(const model::TransportCatalogue& transport_catalogue, int id, std::string_view name) {
-        json::Dict dict;
-        dict["request_id"] = id;
+    void PrintStopStat(const model::TransportCatalogue& transport_catalogue, int id,
+        std::string_view name, json::Builder& response) {
+        response.StartDict();
+        response.Key("request_id"s).Value(id);
         if (auto buses = transport_catalogue.GetBusesByStop(name); buses.has_value()) {            
-            json::Array buses_list;
+            response.Key("buses"s).StartArray();           
             for (const auto& bus_name : buses.value()) {
-                buses_list.emplace_back(std::string(bus_name));
+                response.Value(std::string(bus_name));
             }
-            dict["buses"] = buses_list;
+            response.EndArray();
         }
         else
         {
-            dict["error_message"] = "not found"s;
+            response.Key("error_message"s).Value("not found"s);
         }
-        return json::Node(dict);
+        response.EndDict();
     }
 
-    json::Node PrintMapStat(const renderer::MapRenderer& map_renderer, int id) {
-        json::Dict dict;
-        dict["request_id"] = id;
+    void PrintMapStat(const renderer::MapRenderer& map_renderer, int id, json::Builder& response) {
+        response.StartDict();
+        response.Key("request_id"s).Value(id);
         std::ostringstream oss;
         map_renderer.RenderMap().Render(oss);
         std::string map_str = oss.str();
-        dict["map"] = map_str;
-
-        return json::Node(dict);
+        response.Key("map"s).Value(map_str);
+        response.EndDict();
     }
 
     void JsonReader::ApplyStatRequests(const model::TransportCatalogue& catalogue) const {
         using namespace json;
         //----
-        auto root = doc_.GetRoot().AsMap();
+        auto root = doc_.GetRoot().AsDict();
         auto stat_requests = root.at("stat_requests");
-        json::Array result;
+        auto result = json::Builder();
+        result.StartArray();
         for (const auto& stat : stat_requests.AsArray()) {
-            auto stat_obj = stat.AsMap();
+            auto stat_obj = stat.AsDict();
             int id = stat_obj.at("id").AsInt();
             std::string name;
             if (stat_obj.count("name")) {
@@ -192,21 +195,19 @@ namespace io {
             std::string type = stat_obj.at("type").AsString();
 
             if (type == "Bus") {
-                auto node = PrintBusStat(catalogue, id, name);
-                result.push_back(std::move(node));
+                PrintBusStat(catalogue, id, name, result);
+                
             }
             if (type == "Stop") {
-                auto node = PrintStopStat(catalogue, id, name);
-                result.push_back(std::move(node));
+                PrintStopStat(catalogue, id, name, result);                
             }
             if (type == "Map") {
                 auto settings = ParseRenderSettings();
                 renderer::MapRenderer map_renderer(catalogue, settings);
-                auto node = PrintMapStat(map_renderer, id);
-                result.push_back(std::move(node));
+                PrintMapStat(map_renderer, id, result);                
             }
-
         }
-		Print(json::Document{ Node(std::move(result)) }, std::cout);
+        result.EndArray();
+		Print(json::Document{ result.Build() }, std::cout);
     }
 }

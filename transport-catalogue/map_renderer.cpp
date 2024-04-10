@@ -152,7 +152,7 @@ namespace renderer {
         const auto& stops_in_buses = db_.GetSortedStopsInRoutes();
         for (const auto& stop_name : stops_in_buses) {
             auto stop = db_.FindStopByName(stop_name);
-            geo_coords.push_back(stop->coord);
+            geo_coords.emplace_back(stop->coord);
         }
         return geo_coords;
     }

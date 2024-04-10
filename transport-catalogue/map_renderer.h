@@ -45,6 +45,7 @@ namespace renderer {
 
     class SphereProjector {
     public:
+        SphereProjector() = default;
         // points_begin и points_end задают начало и конец интервала элементов geo::Coordinates
         template <typename PointInputIt>
         SphereProjector(PointInputIt points_begin, PointInputIt points_end,
@@ -97,14 +98,17 @@ namespace renderer {
             }
         }
 
+        SphereProjector(SphereProjector&& rhs) = default;
+        SphereProjector& operator=(SphereProjector&& rhs) = default;
+
         // Проецирует широту и долготу в координаты внутри SVG-изображения
         svg::Point operator()(geo::Coordinates coords) const;
 
     private:
-        double padding_;
-        double min_lon_ = 0;
-        double max_lat_ = 0;
-        double zoom_coeff_ = 0;
+        double padding_ = 0.;
+        double min_lon_ = 0.;
+        double max_lat_ = 0.;
+        double zoom_coeff_ = 0.;
     };
 
 
@@ -112,8 +116,8 @@ namespace renderer {
 	class MapRenderer {
     public:
         MapRenderer(const model::TransportCatalogue& db, const RenderSettings& settings)
-            : db_(db), settings_(settings), geo_coords_(GetGeoCoords()), 
-            proj_(SphereProjector{ geo_coords_.begin(), geo_coords_.end(), settings_.width, settings_.height, settings_.padding }) {
+            : db_(db), settings_(settings), geo_coords_(std::move(GetGeoCoords())),
+            proj_(std::move(SphereProjector{ geo_coords_.begin(), geo_coords_.end(), settings_.width, settings_.height, settings_.padding })) {           
         }
 
         svg::Document RenderMap() const;
@@ -128,8 +132,8 @@ namespace renderer {
 
         const model::TransportCatalogue& db_;
         const RenderSettings& settings_;
-        const std::vector<geo::Coordinates>& geo_coords_;
-        const SphereProjector& proj_;
+        std::vector<geo::Coordinates> geo_coords_;
+        SphereProjector proj_;
 	};
 
 }
