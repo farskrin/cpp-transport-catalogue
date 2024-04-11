@@ -8,8 +8,8 @@ using namespace std::literals;
 namespace json {
 
 Builder::Builder()
-    : KeyContext(*this), ValueKeyContext(*this), StartDictContext(*this), StartArrayContext(*this)
-    ,root_(), nodes_stack_{&root_}
+    : root_()
+    , nodes_stack_{&root_}
 {}
 
 Node Builder::Build() {
@@ -19,7 +19,7 @@ Node Builder::Build() {
     return std::move(root_);
 }
 
-KeyContext& Builder::Key(std::string key) {
+Builder::DictValueContext Builder::Key(std::string key) {
     Node::Value& host_value = GetCurrentValue();
     
     if (!std::holds_alternative<Dict>(host_value)) {
@@ -29,25 +29,25 @@ KeyContext& Builder::Key(std::string key) {
     nodes_stack_.push_back(
         &std::get<Dict>(host_value)[std::move(key)]
     );
-    return *this;
+    return BaseContext{*this};
 }
 
-Builder& Builder::Value(Node::Value value) {
+Builder::BaseContext Builder::Value(Node::Value value) {
     AddObject(std::move(value), true);
     return *this;
 }
 
-StartDictContext& Builder::StartDict() {
+Builder::DictItemContext Builder::StartDict() {
     AddObject(Dict{}, false);
-    return *this;
+    return BaseContext{*this};
 }
 
-StartArrayContext& Builder::StartArray() {
+Builder::ArrayItemContext Builder::StartArray() {
     AddObject(Array{}, false);
-    return *this;
+    return BaseContext{*this};
 }
 
-Builder& Builder::EndDict() {
+Builder::BaseContext Builder::EndDict() {
     if (!std::holds_alternative<Dict>(GetCurrentValue())) {
         throw std::logic_error("EndDict() outside a dict"s);
     }
@@ -55,14 +55,14 @@ Builder& Builder::EndDict() {
     return *this;
 }
 
-Builder& Builder::EndArray() {
+Builder::BaseContext Builder::EndArray() {
     if (!std::holds_alternative<Array>(GetCurrentValue())) {
         throw std::logic_error("EndDict() outside an array"s);
     }
     nodes_stack_.pop_back();
     return *this;
 }
-  
+
 Node::Value& Builder::GetCurrentValue() {
     if (nodes_stack_.empty()) {
         throw std::logic_error("Attempt to change finalized JSON"s);
@@ -82,8 +82,9 @@ void Builder::AssertNewObjectContext() const {
 
 void Builder::AddObject(Node::Value value, bool one_shot) {
     Node::Value& host_value = GetCurrentValue();
-    if (std::holds_alternative<Array>(host_value)) {
-        Node& node = std::get<Array>(host_value).emplace_back(std::move(value));
+    if (std::holds_alternative<Array>(host_value)) {       
+        Node& node
+            = std::get<Array>(host_value).emplace_back(std::move(value));
         if (!one_shot) {
             nodes_stack_.push_back(&node);
         }
@@ -94,42 +95,6 @@ void Builder::AddObject(Node::Value value, bool one_shot) {
             nodes_stack_.pop_back();
         }
     }
-}
-
-StartArrayContext& StartContainersContext::StartArray() {
-    return builder_.StartArray();
-}
-
-StartDictContext& StartContainersContext::StartDict() {
-    return builder_.StartDict();
-}
-
-ValueKeyContext KeyContext::Value(Node::Value value) {
-    return builder_.Value(std::move(value));
-}
-
-KeyContext& ValueKeyContext::Key(std::string key) {
-    return builder_.Key(std::move(key));
-}
-
-Builder& ValueKeyContext::EndDict() {
-    return builder_.EndDict();
-}
-
-KeyContext& StartDictContext::Key(std::string key) {
-    return builder_.Key(std::move(key));
-}
-
-Builder& StartDictContext::EndDict() {
-    return builder_.EndDict();
-}
-
-StartArrayContext& StartArrayContext::Value(Node::Value value) {
-    return builder_.Value(std::move(value));
-}
-
-Builder& StartArrayContext::EndArray() {
-    return builder_.EndArray();
 }
 
 }  // namespace json
