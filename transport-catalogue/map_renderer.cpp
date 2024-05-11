@@ -120,7 +120,7 @@ namespace renderer {
 
     svg::Document MapRenderer::RenderMap() const {
 
-        auto bus_data = db_.GetBusData();
+        const auto& bus_data = db_.GetBusData();
         std::set<std::string> bus_names;
         std::transform(bus_data.begin(), bus_data.end(), std::inserter(bus_names, bus_names.begin()),
             [](const std::pair<std::string_view, const model::Bus*>& data) {

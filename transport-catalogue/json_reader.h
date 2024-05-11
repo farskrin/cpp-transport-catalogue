@@ -4,6 +4,7 @@
 #include "json_builder.h"
 #include "map_renderer.h"
 #include "transport_catalogue.h"
+#include "transport_router.h"
 #include "request_handler.h"
 
 
@@ -21,7 +22,7 @@ namespace io {
      * Для некольцевого маршрута (A-B-C-D) возвращает массив названий остановок [A,B,C,D,C,B,A]
      * Возвращает маршрут и конечные точки маршрута
      */
-    std::pair<std::vector<std::string>, std::vector<std::string>> ParseRoute(const json::Node stops_node, bool is_roundtrip);
+    std::tuple<std::vector<std::string>, std::vector<std::string>, size_t> ParseRoute(const json::Node stops_node, bool is_roundtrip);
 
 
     class JsonReader {
@@ -33,6 +34,7 @@ namespace io {
         void ApplyBaseRequests(model::TransportCatalogue& catalogue) const;
 
         renderer::RenderSettings ParseRenderSettings() const;
+        routing::RoutingSettings ParseRoutingSettings() const;
 
         void ApplyStatRequests(const model::TransportCatalogue& catalogue) const;
 

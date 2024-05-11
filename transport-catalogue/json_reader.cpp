@@ -1,5 +1,7 @@
 #include "json_reader.h"
 #include <sstream>
+#include <variant>
+#include <memory>
 
 /*
  * Здесь можно разместить код наполнения транспортного справочника данными из JSON,
@@ -8,9 +10,10 @@
 using namespace std::literals;
 
 namespace io {
-    std::pair<std::vector<std::string>, std::vector<std::string>> ParseRoute(const json::Node stops_node, bool is_roundtrip) {
+    std::tuple<std::vector<std::string>, std::vector<std::string>, size_t> ParseRoute(const json::Node stops_node, bool is_roundtrip) {
         std::vector<std::string> route;
         std::vector<std::string> end_points;
+        size_t end_point_idx = 0;
         const auto& stops_list = stops_node.AsArray();
         route.reserve(stops_list.size());
         for (const auto& stop : stops_list) {
@@ -19,13 +22,14 @@ namespace io {
         if (!route.empty()) {
             end_points = is_roundtrip ? std::vector<std::string>{route.front()}
             : std::vector<std::string>{ route.front(), route.back() };
+            end_point_idx = route.size() - 1;
         }
         if (!is_roundtrip) {
             std::vector<std::string> results(route.begin(), route.end());
             results.insert(results.end(), std::next(route.rbegin()), route.rend());
-            return { results, end_points };
+            return { results, end_points, end_point_idx };
         }
-        return { route, end_points };
+        return { route, end_points, end_point_idx };
     }
 
     void JsonReader::ApplyBaseRequests(model::TransportCatalogue& catalogue) const {
@@ -67,9 +71,9 @@ namespace io {
             if (type == "Bus") {
                 json::Node stops_node = base_obj.at("stops");
                 bool is_roundtrip = base_obj.at("is_roundtrip").AsBool();
-                auto [route, end_points] = ParseRoute(stops_node, is_roundtrip);
+                auto [route, end_points, end_point_idx] = ParseRoute(stops_node, is_roundtrip);
 
-                catalogue.AddBus(base_obj.at("name").AsString(), route, end_points, is_roundtrip);
+                catalogue.AddBus(base_obj.at("name").AsString(), route, end_points, is_roundtrip, end_point_idx);
             }
         }
     }
@@ -126,6 +130,18 @@ namespace io {
         return render_settings;
     }
 
+    routing::RoutingSettings JsonReader::ParseRoutingSettings() const
+    {
+        using namespace json;
+        auto meter_per_min = [](double km_per_hour) { return 1'000. * km_per_hour / 60.; };
+        routing::RoutingSettings routing_settings;
+        auto root = doc_.GetRoot().AsDict();
+        auto settings_obj = root.at("routing_settings").AsDict();
+        routing_settings.bus_wait_time = settings_obj.at("bus_wait_time").AsInt();
+        routing_settings.bus_velocity = meter_per_min(settings_obj.at("bus_velocity").AsDouble());
+        return routing_settings;
+    }
+
     //-----------------------
     std::string Print(const json::Node& node) {
         std::ostringstream out;
@@ -134,57 +150,99 @@ namespace io {
     }
 
     void PrintBusStat(const model::TransportCatalogue& transport_catalogue, int id,
-        std::string_view name, json::Builder& response) {
-        response.StartDict();
-        response.Key("request_id").Value(id);
+        std::string_view name, json::Builder& builder) {
+        builder.StartDict();
+        builder.Key("request_id").Value(id);
         if (auto info = transport_catalogue.GetRouteInfoByBusName(std::string(name)); info.has_value()) {
-            response.Key("curvature").Value(info->curvature);
-            response.Key("route_length").Value(info->length);
-            response.Key("stop_count").Value(static_cast<int>(info->stop_count));
-            response.Key("unique_stop_count").Value(static_cast<int>(info->unique_stop_count));
+            builder.Key("curvature").Value(info->curvature);
+            builder.Key("route_length").Value(info->length);
+            builder.Key("stop_count").Value(static_cast<int>(info->stop_count));
+            builder.Key("unique_stop_count").Value(static_cast<int>(info->unique_stop_count));
         }
         else
         {
-            response.Key("error_message"s).Value("not found"s);
+            builder.Key("error_message"s).Value("not found"s);
         }
-        response.EndDict();
+        builder.EndDict();
     }
 
     void PrintStopStat(const model::TransportCatalogue& transport_catalogue, int id,
-        std::string_view name, json::Builder& response) {
-        response.StartDict();
-        response.Key("request_id"s).Value(id);
+        std::string_view name, json::Builder& builder) {
+        builder.StartDict();
+        builder.Key("request_id"s).Value(id);
         if (auto buses = transport_catalogue.GetBusesByStop(name); buses.has_value()) {            
-            response.Key("buses"s).StartArray();           
+            builder.Key("buses"s).StartArray();           
             for (const auto& bus_name : buses.value()) {
-                response.Value(std::string(bus_name));
+                builder.Value(std::string(bus_name));
             }
-            response.EndArray();
+            builder.EndArray();
         }
         else
         {
-            response.Key("error_message"s).Value("not found"s);
+            builder.Key("error_message"s).Value("not found"s);
         }
-        response.EndDict();
+        builder.EndDict();
     }
 
-    void PrintMapStat(const renderer::MapRenderer& map_renderer, int id, json::Builder& response) {
-        response.StartDict();
-        response.Key("request_id"s).Value(id);
+    void PrintMapStat(const renderer::MapRenderer& map_renderer, int id, json::Builder& builder) {
+        builder.StartDict();
+        builder.Key("request_id"s).Value(id);
         std::ostringstream oss;
         map_renderer.RenderMap().Render(oss);
         std::string map_str = oss.str();
-        response.Key("map"s).Value(map_str);
-        response.EndDict();
+        builder.Key("map"s).Value(map_str);
+        builder.EndDict();
+    }
+
+    struct RouteItemVisitor {
+        json::Builder& json;
+
+        void operator()(const routing::WaitItem& response) const {
+            json.Key("type"s).Value(response.type);
+            json.Key("stop_name"s).Value(response.stop_name);
+            json.Key("time"s).Value(response.time);
+        }
+        void operator()(const routing::BusItem& response) const {
+            json.Key("type"s).Value(response.type);
+            json.Key("bus").Value(response.bus_name);
+            json.Key("span_count"s).Value(response.span_count);
+            json.Key("time"s).Value(response.time);
+        }
+    };
+
+    void PrintRouteStat(const routing::ResponseData& router_data, int id, json::Builder& builder) {
+        builder.StartDict();
+        builder.Key("request_id"s).Value(id);
+        builder.Key("total_time"s).Value(router_data.total_time);
+        builder.Key("items"s).StartArray();
+        for (const auto& item : router_data.items) {
+            builder.StartDict();
+            std::visit(RouteItemVisitor{ builder }, item);
+            builder.EndDict();
+        }
+        builder.EndArray();
+        builder.EndDict();
+    }
+
+    void PrintErrorMessage(int request_id, json::Builder& builder) {
+        builder.StartDict();
+        builder.Key("request_id"s).Value(request_id);
+        builder.Key("error_message"s).Value("not found"s);
+        builder.EndDict();
     }
 
     void JsonReader::ApplyStatRequests(const model::TransportCatalogue& catalogue) const {
         using namespace json;
         //----
+        std::optional<renderer::RenderSettings> render_settings;
+        std::optional <routing::RoutingSettings> routing_settings;
+        std::unique_ptr<renderer::MapRenderer> map_renderer = nullptr;
+        std::unique_ptr<routing::TransportRouter> router = nullptr;
+        //----
         auto root = doc_.GetRoot().AsDict();
         auto stat_requests = root.at("stat_requests");
-        auto result = json::Builder();
-        result.StartArray();
+        auto builder = json::Builder();
+        builder.StartArray();
         for (const auto& stat : stat_requests.AsArray()) {
             auto stat_obj = stat.AsDict();
             int id = stat_obj.at("id").AsInt();
@@ -195,19 +253,35 @@ namespace io {
             std::string type = stat_obj.at("type").AsString();
 
             if (type == "Bus") {
-                PrintBusStat(catalogue, id, name, result);
-                
+                PrintBusStat(catalogue, id, name, builder);                
             }
             if (type == "Stop") {
-                PrintStopStat(catalogue, id, name, result);                
+                PrintStopStat(catalogue, id, name, builder);
             }
             if (type == "Map") {
-                auto settings = ParseRenderSettings();
-                renderer::MapRenderer map_renderer(catalogue, settings);
-                PrintMapStat(map_renderer, id, result);                
+                if (!render_settings.has_value()) {
+                    render_settings = ParseRenderSettings();
+                    map_renderer = std::make_unique<renderer::MapRenderer>(catalogue, *render_settings);
+                }
+                PrintMapStat(*map_renderer, id, builder);
+            }
+            if (type == "Route") {
+                const auto& from = stat_obj.at("from").AsString();
+                const auto& to = stat_obj.at("to").AsString();
+                if (!routing_settings.has_value()) {
+                    routing_settings = ParseRoutingSettings();
+                    router = std::make_unique<routing::TransportRouter>(catalogue, *routing_settings);
+                }                
+                if (auto route_data = router->BuildRoute(from, to)) {
+                    PrintRouteStat(*route_data, id, builder);
+                }
+                else
+                {
+                    PrintErrorMessage(id, builder);
+                }
             }
         }
-        result.EndArray();
-		Print(json::Document{ result.Build() }, std::cout);
+        builder.EndArray();
+		Print(json::Document{ builder.Build() }, std::cout);
     }
 }

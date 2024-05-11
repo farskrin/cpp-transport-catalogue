@@ -4,6 +4,7 @@
 #include <sstream>
 
 #include "transport_catalogue.h"
+#include "transport_router.h"
 #include "request_handler.h"
 #include "json_reader.h"
 #include "map_renderer.h"

@@ -5,16 +5,16 @@ namespace model {
     void TransportCatalogue::AddStop(const std::string& stop_name, const geo::Coordinates& coord) {
         auto stop_ptr = GetStopPtr(stop_name, coord);
         stop_data_[stop_ptr->name] = stop_ptr;
+        stops_in_task_.insert(stop_ptr->name);
     }
 
-    void TransportCatalogue::SetStopsDistance(const std::string& from, const std::string& to, double distance)
-    {
+    void TransportCatalogue::SetStopsDistance(const std::string& from, const std::string& to, double distance) {    
         auto pair_stops = std::make_pair(FindStopByName(from), FindStopByName(to));
         stops_distance_[pair_stops] = distance;
     }
 
     void TransportCatalogue::AddBus(const std::string& bus_name, const std::vector<std::string>& route,
-        const std::vector<std::string>& end_points, bool is_roundtrip) {
+        const std::vector<std::string>& end_points, bool is_roundtrip, size_t end_point_idx) {
 
         std::vector<std::string_view> copy_route(route.size());
         std::transform(route.begin(), route.end(), copy_route.begin(), [&](std::string_view s) {
@@ -24,7 +24,7 @@ namespace model {
         std::transform(end_points.begin(), end_points.end(), copy_end_points.begin(), [&](std::string_view s) {
             return GetCopyStopName(s);
             });
-        auto bus_ptr = GetBusPtr(bus_name, copy_route, copy_end_points, is_roundtrip);
+        auto bus_ptr = GetBusPtr(bus_name, copy_route, copy_end_points, is_roundtrip, end_point_idx);
         bus_data_[bus_ptr->name] = bus_ptr;
         //--
         for (std::string_view stop_name : copy_route) {
@@ -106,12 +106,48 @@ namespace model {
         return std::nullopt;
     }
 
+    const std::deque<Bus>& TransportCatalogue::GetBuses() const {
+        return buses_;
+    }
+
     const std::unordered_map<std::string_view, const Bus*>& TransportCatalogue::GetBusData() const {
         return bus_data_;
     }
 
     std::set<std::string_view> TransportCatalogue::GetSortedStopsInRoutes() const {
         return stops_in_routes_;
+    }
+
+    std::set<std::string_view> TransportCatalogue::GetSortedStopsInTask() const {    
+        return stops_in_task_;
+    }
+
+    std::vector<TimeAndSpanCount> TransportCatalogue::GetRouteTimeAndSpan(std::string_view bus_name, double bus_velocity) const {
+        std::vector<TimeAndSpanCount> dist_time_span;
+
+        auto bus = bus_data_.at(bus_name);
+        auto route = bus->route;
+        std::vector<std::string_view> end_points = bus->end_points;        
+        size_t route_size = bus->is_roundtrip ? route.size() : bus->end_point_idx + 1;
+
+        for (size_t i = 0; i + 1 < route_size; i++) {       //from
+		double road_time = 0.;
+		int span_count = 0;
+        double road_time_back = 0.;
+            for (size_t j = i + 1; j < route_size; j++) {   //to                
+                
+                road_time += GetStopsDistance(route[j - 1], route[j]) / bus_velocity;
+                span_count++;               
+				dist_time_span.emplace_back(route[i], route[j], road_time, span_count);
+
+                if (!bus->is_roundtrip) {
+                    road_time_back += GetStopsDistance(route[j], route[j - 1]) / bus_velocity;
+                    dist_time_span.emplace_back(route[j], route[i], road_time_back, span_count);
+                }
+            }
+        }
+
+        return dist_time_span;
     }
 
     /*const std::unordered_map<std::string_view, std::set<std::string_view>>& TransportCatalogue::GetStopPerBuses() const {
@@ -134,12 +170,12 @@ namespace model {
     }
 
     const Bus* TransportCatalogue::GetBusPtr(const std::string& name, const std::vector<std::string_view>& route,
-        const std::vector<std::string_view>& end_points, bool is_roundtrip)
+        const std::vector<std::string_view>& end_points, bool is_roundtrip, size_t end_point_idx)
     {
         if (const auto it = bus_data_.find(name); it != bus_data_.end()) {
             return it->second;
         }
-        return &buses_.emplace_back(name, route, end_points, is_roundtrip);
+        return &buses_.emplace_back(name, route, end_points, is_roundtrip, end_point_idx);
     }
 
     std::string_view TransportCatalogue::GetCopyBusName(std::string_view name) {

@@ -34,14 +34,16 @@ namespace model {
     };
 
     struct Bus {
-        Bus(const std::string& bus_name, const std::vector<std::string_view>& route, const std::vector<std::string_view>& end_points, bool is_roundtrip)
-            : name(bus_name), route(route), end_points(end_points), is_roundtrip(is_roundtrip) {
+        Bus(const std::string& bus_name, const std::vector<std::string_view>& route, 
+            const std::vector<std::string_view>& end_points, bool is_roundtrip, size_t end_point_idx)
+            : name(bus_name), route(route), end_points(end_points), is_roundtrip(is_roundtrip), end_point_idx(end_point_idx) {
         }
         std::string name;
         std::vector<std::string_view> route;
         //--конечные точки маршрута, одна для кольцевого и две для некольцевого
         std::vector<std::string_view> end_points;
         bool is_roundtrip;
+        size_t end_point_idx = 0;
     };
 
     class StopHasher {

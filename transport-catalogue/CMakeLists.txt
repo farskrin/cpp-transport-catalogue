@@ -1,6 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.15.0)
 
-set(PROJECT TransportCatSVG3)
+set(PROJECT TransportCatalogue)
 project(${PROJECT})
 set(CMAKE_CXX_STANDARD 17)
 
